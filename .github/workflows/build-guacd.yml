@@ -100,6 +100,7 @@ jobs:
             mingw-w64-x86_64-libwebsockets
             mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-dlfcn
+            mingw-w64-x86_64-util-linux
             autoconf
             automake
             libtool
