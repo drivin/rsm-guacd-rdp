@@ -99,7 +99,7 @@ jobs:
             mingw-w64-x86_64-pango
             mingw-w64-x86_64-libwebsockets
             mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-libltdl
+            mingw-w64-x86_64-dlfcn
             autoconf
             automake
             libtool
@@ -120,8 +120,8 @@ jobs:
           # Windows hat kein timer_create()
           export ac_cv_func_timer_create=yes
 
-          # libltdl ersetzt dlopen/libdl
-          export LIBS="-lltdl"
+          # MSYS2 dlfcn package provides libdl/dlopen wrapper
+          export LIBS="-ldl ${LIBS:-}"
 
           ./configure \
             --prefix=/mingw64 \
