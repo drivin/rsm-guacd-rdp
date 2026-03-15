@@ -35,12 +35,15 @@ jobs:
             libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
             freerdp2-dev libpango1.0-dev libssh2-1-dev libtelnet-dev \
             libvncserver-dev libwebsockets-dev libpulse-dev \
-            wget ca-certificates
+            curl ca-certificates
 
       - name: Download guacamole-server
         run: |
-          wget https://archive.apache.org/dist/guacamole/${GUAC_VERSION}/source/guacamole-server-${GUAC_VERSION}.tar.gz
-          tar -xzf guacamole-server-${GUAC_VERSION}.tar.gz
+          VERSION="${GUAC_VERSION//$'\r'/}"
+          URL="https://archive.apache.org/dist/guacamole/${VERSION}/source/guacamole-server-${VERSION}.tar.gz"
+          echo "Downloading $URL"
+          curl -L -o guacamole.tar.gz "$URL"
+          tar -xzf guacamole.tar.gz
 
       - name: Configure
         working-directory: guacamole-server-${{ env.GUAC_VERSION }}
@@ -101,13 +104,16 @@ jobs:
             libssh2-devel
             libwebsockets-devel
             libvncserver-devel
-            wget
+            curl
 
       - name: Download source
         shell: C:\cygwin\bin\bash.exe -eo pipefail {0}
         run: |
-          wget https://archive.apache.org/dist/guacamole/${GUAC_VERSION}/source/guacamole-server-${GUAC_VERSION}.tar.gz
-          tar -xzf guacamole-server-${GUAC_VERSION}.tar.gz
+          VERSION="${GUAC_VERSION//$'\r'/}"
+          URL="https://archive.apache.org/dist/guacamole/${VERSION}/source/guacamole-server-${VERSION}.tar.gz"
+          echo "Downloading $URL"
+          curl -L -o guacamole.tar.gz "$URL"
+          tar -xzf guacamole.tar.gz
 
       - name: Configure
         shell: C:\cygwin\bin\bash.exe -eo pipefail {0}
