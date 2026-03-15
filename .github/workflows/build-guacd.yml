@@ -39,25 +39,28 @@ jobs:
 
       - name: Download guacamole-server
         run: |
-          VERSION="${GUAC_VERSION//$'\r'/}"
+          VERSION="$(printf '%s' "$GUAC_VERSION" | tr -d '\r\n')"
           URL="https://archive.apache.org/dist/guacamole/${VERSION}/source/guacamole-server-${VERSION}.tar.gz"
           echo "Downloading $URL"
-          curl -L -o guacamole.tar.gz "$URL"
+          curl -fL -o guacamole.tar.gz "$URL"
           tar -xzf guacamole.tar.gz
 
       - name: Configure
-        working-directory: guacamole-server-${{ env.GUAC_VERSION }}
         run: |
+          VERSION="$(printf '%s' "$GUAC_VERSION" | tr -d '\r\n')"
+          cd guacamole-server-${VERSION}
           ./configure --prefix=${PREFIX_DIR}
 
       - name: Build
-        working-directory: guacamole-server-${{ env.GUAC_VERSION }}
         run: |
+          VERSION="$(printf '%s' "$GUAC_VERSION" | tr -d '\r\n')"
+          cd guacamole-server-${VERSION}
           make -j$(nproc)
 
       - name: Install
-        working-directory: guacamole-server-${{ env.GUAC_VERSION }}
         run: |
+          VERSION="$(printf '%s' "$GUAC_VERSION" | tr -d '\r\n')"
+          cd guacamole-server-${VERSION}
           make DESTDIR=${DESTDIR} install
 
       - name: Bundle
@@ -109,28 +112,31 @@ jobs:
       - name: Download source
         shell: C:\cygwin\bin\bash.exe -eo pipefail {0}
         run: |
-          VERSION="${GUAC_VERSION//$'\r'/}"
+          VERSION="$(printf '%s' "$GUAC_VERSION" | tr -d '\r\n')"
           URL="https://archive.apache.org/dist/guacamole/${VERSION}/source/guacamole-server-${VERSION}.tar.gz"
           echo "Downloading $URL"
-          curl -L -o guacamole.tar.gz "$URL"
+          curl -fL -o guacamole.tar.gz "$URL"
           tar -xzf guacamole.tar.gz
 
       - name: Configure
         shell: C:\cygwin\bin\bash.exe -eo pipefail {0}
         run: |
-          cd guacamole-server-${GUAC_VERSION}
+          VERSION="$(printf '%s' "$GUAC_VERSION" | tr -d '\r\n')"
+          cd guacamole-server-${VERSION}
           ./configure --prefix=/usr
 
       - name: Build
         shell: C:\cygwin\bin\bash.exe -eo pipefail {0}
         run: |
-          cd guacamole-server-${GUAC_VERSION}
+          VERSION="$(printf '%s' "$GUAC_VERSION" | tr -d '\r\n')"
+          cd guacamole-server-${VERSION}
           make -j$(nproc)
 
       - name: Install
         shell: C:\cygwin\bin\bash.exe -eo pipefail {0}
         run: |
-          cd guacamole-server-${GUAC_VERSION}
+          VERSION="$(printf '%s' "$GUAC_VERSION" | tr -d '\r\n')"
+          cd guacamole-server-${VERSION}
           make install DESTDIR=/tmp/guac
 
       - name: Bundle
