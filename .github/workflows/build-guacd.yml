@@ -99,7 +99,6 @@ jobs:
             mingw-w64-x86_64-pango
             mingw-w64-x86_64-libwebsockets
             mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-libuuid
             mingw-w64-x86_64-dlfcn
             autoconf
             automake
@@ -121,10 +120,10 @@ jobs:
           # Windows hat kein timer_create()
           export ac_cv_func_timer_create=yes
 
-          # Windows stellt UUID über RPC bereit, daher libuuid-Check überspringen
-          export ac_cv_func_uuid_generate=yes
+          # libuuid Library Check überspringen
+          export ac_cv_lib_uuid_uuid_generate=yes
 
-          # dlopen über MSYS2 dlfcn
+          # dlopen über dlfcn
           export LIBS="-ldl ${LIBS:-}"
 
           ./configure \
