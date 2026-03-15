@@ -12,7 +12,8 @@ permissions:
 
 env:
   GUAC_VERSION: 1.6.0
-  PREFIX_DIR: /tmp/guac-install
+  PREFIX_DIR: /opt/guac
+  DESTDIR: /tmp/guac-install
   ARTIFACT_NAME: guacd-linux-x86_64
 
 jobs:
@@ -68,17 +69,17 @@ jobs:
       - name: Install into staging prefix
         working-directory: guacamole-server-${{ env.GUAC_VERSION }}
         run: |
-          make install
+          make DESTDIR="${DESTDIR}" install
 
       - name: Collect runtime files
         run: |
           mkdir -p bundle/bin
           mkdir -p bundle/lib
 
-          cp "${PREFIX_DIR}/sbin/guacd" bundle/bin/
+          cp "${DESTDIR}${PREFIX_DIR}/sbin/guacd" bundle/bin/
 
           # libguac + protocol modules
-          find "${PREFIX_DIR}/lib" -maxdepth 1 -type f \( -name "libguac*.so*" -o -name "libguac-client-*.so*" \) \
+          find "${DESTDIR}${PREFIX_DIR}/lib" -maxdepth 1 -type f \( -name "libguac*.so*" -o -name "libguac-client-*.so*" \) \
             -exec cp -v {} bundle/lib/ \;
 
       - name: Collect shared library dependencies
@@ -96,15 +97,6 @@ jobs:
           for f in bundle/lib/*.so*; do
             copy_deps "$f"
           done
-
-      - name: Deduplicate libraries
-        run: |
-          cd bundle/lib
-          for f in *.so*; do
-            [ -e "$f" ] || continue
-            ln -sf "$f" "$(basename "$f")" || true
-          done
-          cd ../..
 
       - name: Create launcher
         run: |
