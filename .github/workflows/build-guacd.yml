@@ -100,7 +100,6 @@ jobs:
             mingw-w64-x86_64-libwebsockets
             mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-dlfcn
-            mingw-w64-x86_64-libuuid
             autoconf
             automake
             libtool
@@ -121,7 +120,10 @@ jobs:
           # Windows hat kein timer_create()
           export ac_cv_func_timer_create=yes
 
-          # MSYS2 dlfcn package provides libdl/dlopen wrapper
+          # Windows stellt UUID über RPC bereit, daher libuuid-Check überspringen
+          export ac_cv_func_uuid_generate=yes
+
+          # dlopen über MSYS2 dlfcn
           export LIBS="-ldl ${LIBS:-}"
 
           ./configure \
