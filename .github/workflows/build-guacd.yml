@@ -117,10 +117,15 @@ jobs:
         run: |
           cd guacamole-server-${GUAC_VERSION}
 
-          # Override the autoconf check for timer_create (not available on Windows)
+          # Windows hat kein timer_create()
           export ac_cv_func_timer_create=yes
 
-          ./configure --prefix=/mingw64 --disable-posix-timers
+          # libltdl ersetzt dlopen/libdl
+          export LIBS="-lltdl"
+
+          ./configure \
+            --prefix=/mingw64 \
+            --disable-posix-timers
 
       - name: Build
         shell: msys2 {0}
