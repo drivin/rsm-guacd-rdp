@@ -115,7 +115,7 @@ jobs:
         shell: msys2 {0}
         run: |
           cd guacamole-server-${GUAC_VERSION}
-          ./configure --prefix=/mingw64
+          ./configure --prefix=/mingw64 --disable-posix-timers
 
       - name: Build
         shell: msys2 {0}
