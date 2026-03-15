@@ -14,116 +14,132 @@ env:
   GUAC_VERSION: 1.6.0
   PREFIX_DIR: /opt/guac
   DESTDIR: /tmp/guac-install
-  ARTIFACT_NAME: guacd-linux-x86_64
 
 jobs:
+
   build-linux:
     runs-on: ubuntu-24.04
 
+    env:
+      ARTIFACT_NAME: guacd-linux-x86_64
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
-            autoconf \
-            automake \
-            libtool \
-            pkg-config \
-            libcairo2-dev \
-            libjpeg-turbo8-dev \
-            libpng-dev \
-            uuid-dev \
-            libavcodec-dev \
-            libavformat-dev \
-            libavutil-dev \
-            libswscale-dev \
-            freerdp2-dev \
-            libpango1.0-dev \
-            libssh2-1-dev \
-            libtelnet-dev \
-            libvncserver-dev \
-            libwebsockets-dev \
-            libpulse-dev \
-            wget \
-            ca-certificates
+            build-essential autoconf automake libtool pkg-config \
+            libcairo2-dev libjpeg-turbo8-dev libpng-dev uuid-dev \
+            libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
+            freerdp2-dev libpango1.0-dev libssh2-1-dev libtelnet-dev \
+            libvncserver-dev libwebsockets-dev libpulse-dev \
+            wget ca-certificates
 
-      - name: Download guacamole-server source
+      - name: Download guacamole-server
         run: |
-          wget "https://archive.apache.org/dist/guacamole/${GUAC_VERSION}/source/guacamole-server-${GUAC_VERSION}.tar.gz"
-          tar -xzf "guacamole-server-${GUAC_VERSION}.tar.gz"
+          wget https://archive.apache.org/dist/guacamole/${GUAC_VERSION}/source/guacamole-server-${GUAC_VERSION}.tar.gz
+          tar -xzf guacamole-server-${GUAC_VERSION}.tar.gz
 
       - name: Configure
         working-directory: guacamole-server-${{ env.GUAC_VERSION }}
         run: |
-          ./configure --prefix="${PREFIX_DIR}"
+          ./configure --prefix=${PREFIX_DIR}
 
       - name: Build
         working-directory: guacamole-server-${{ env.GUAC_VERSION }}
         run: |
-          make -j"$(nproc)"
+          make -j$(nproc)
 
-      - name: Install into staging prefix
+      - name: Install
         working-directory: guacamole-server-${{ env.GUAC_VERSION }}
         run: |
-          make DESTDIR="${DESTDIR}" install
+          make DESTDIR=${DESTDIR} install
 
-      - name: Collect runtime files
+      - name: Bundle
         run: |
-          mkdir -p bundle/bin
-          mkdir -p bundle/lib
+          mkdir -p bundle/bin bundle/lib
+          cp ${DESTDIR}${PREFIX_DIR}/sbin/guacd bundle/bin/
+          find ${DESTDIR}${PREFIX_DIR}/lib -name "*.so*" -exec cp {} bundle/lib/ \;
 
-          cp "${DESTDIR}${PREFIX_DIR}/sbin/guacd" bundle/bin/
-
-          # libguac + protocol modules
-          find "${DESTDIR}${PREFIX_DIR}/lib" -maxdepth 1 -type f \( -name "libguac*.so*" -o -name "libguac-client-*.so*" \) \
-            -exec cp -v {} bundle/lib/ \;
-
-      - name: Collect shared library dependencies
+      - name: Archive
         run: |
-          copy_deps () {
-            ldd "$1" | awk '/=> \// { print $3 }' | while read dep; do
-              if [ -f "$dep" ]; then
-                cp -v "$dep" bundle/lib/
-              fi
-            done
-          }
+          tar -czf ${ARTIFACT_NAME}.tar.gz -C bundle .
 
-          copy_deps bundle/bin/guacd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_NAME }}.tar.gz
 
-          for f in bundle/lib/*.so*; do
-            copy_deps "$f"
-          done
 
-      - name: Create launcher
+  build-windows:
+    runs-on: windows-2022
+
+    env:
+      ARTIFACT_NAME: guacd-windows-x86_64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >
+            base-devel
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cairo
+            mingw-w64-x86_64-freerdp
+            mingw-w64-x86_64-libpng
+            mingw-w64-x86_64-libjpeg-turbo
+            mingw-w64-x86_64-libssh2
+            mingw-w64-x86_64-libvncserver
+            mingw-w64-x86_64-pango
+            mingw-w64-x86_64-libwebsockets
+            mingw-w64-x86_64-pkg-config
+            autoconf
+            automake
+            libtool
+            make
+            wget
+
+      - name: Download source
+        shell: msys2 {0}
         run: |
-          cat > bundle/run-guacd.sh <<'EOF'
-          #!/usr/bin/env bash
-          set -euo pipefail
+          wget https://archive.apache.org/dist/guacamole/${GUAC_VERSION}/source/guacamole-server-${GUAC_VERSION}.tar.gz
+          tar -xzf guacamole-server-${GUAC_VERSION}.tar.gz
 
-          BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-          export LD_LIBRARY_PATH="${BASE_DIR}/lib:${LD_LIBRARY_PATH:-}"
-
-          exec "${BASE_DIR}/bin/guacd" -f -b 127.0.0.1 -l 4822
-          EOF
-
-          chmod +x bundle/run-guacd.sh
-
-      - name: Show bundle contents
+      - name: Configure
+        shell: msys2 {0}
         run: |
-          echo "Bundle structure:"
-          ls -R bundle
+          cd guacamole-server-${GUAC_VERSION}
+          ./configure --prefix=/mingw64
 
-      - name: Archive bundle
+      - name: Build
+        shell: msys2 {0}
         run: |
-          tar -czf "${ARTIFACT_NAME}.tar.gz" -C bundle .
+          cd guacamole-server-${GUAC_VERSION}
+          make -j$(nproc)
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Install
+        shell: msys2 {0}
+        run: |
+          cd guacamole-server-${GUAC_VERSION}
+          make install
+
+      - name: Bundle
+        shell: msys2 {0}
+        run: |
+          mkdir bundle
+          cp /mingw64/sbin/guacd.exe bundle/
+
+      - name: Archive
+        run: |
+          tar -czf ${env:ARTIFACT_NAME}.tar.gz bundle
+
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: ${{ env.ARTIFACT_NAME }}.tar.gz
