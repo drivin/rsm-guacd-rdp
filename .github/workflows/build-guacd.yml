@@ -99,6 +99,7 @@ jobs:
             mingw-w64-x86_64-pango
             mingw-w64-x86_64-libwebsockets
             mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-libuuid
             mingw-w64-x86_64-dlfcn
             autoconf
             automake
