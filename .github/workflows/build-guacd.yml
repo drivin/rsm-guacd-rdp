@@ -74,31 +74,57 @@ jobs:
         run: |
           mkdir -p bundle/bin
           mkdir -p bundle/lib
+
           cp "${PREFIX_DIR}/sbin/guacd" bundle/bin/
 
-          # libguac + protocol libs
-          find "${PREFIX_DIR}/lib" -maxdepth 1 -type f \( -name "libguac*.so*" -o -name "libguac-client-rdp.so*" \) -exec cp -v {} bundle/lib/ \;
-
-          # optionale weitere vom Build installierte libs mitnehmen
-          find "${PREFIX_DIR}/lib/freerdp2" -type f -name "*.so*" -exec sh -c 'mkdir -p bundle/lib/freerdp2; cp -v "$1" bundle/lib/freerdp2/' _ {} \; || true
+          # libguac + protocol modules
+          find "${PREFIX_DIR}/lib" -maxdepth 1 -type f \( -name "libguac*.so*" -o -name "libguac-client-*.so*" \) \
+            -exec cp -v {} bundle/lib/ \;
 
       - name: Collect shared library dependencies
         run: |
-          ldd bundle/bin/guacd | awk '/=> \// { print $3 }' | xargs -I '{}' cp -v --parents '{}' bundle/ || true
+          copy_deps () {
+            ldd "$1" | awk '/=> \// { print $3 }' | while read dep; do
+              if [ -f "$dep" ]; then
+                cp -v "$dep" bundle/lib/
+              fi
+            done
+          }
+
+          copy_deps bundle/bin/guacd
+
           for f in bundle/lib/*.so*; do
-            ldd "$f" | awk '/=> \// { print $3 }' | xargs -I '{}' cp -v --parents '{}' bundle/ || true
+            copy_deps "$f"
           done
+
+      - name: Deduplicate libraries
+        run: |
+          cd bundle/lib
+          for f in *.so*; do
+            [ -e "$f" ] || continue
+            ln -sf "$f" "$(basename "$f")" || true
+          done
+          cd ../..
 
       - name: Create launcher
         run: |
           cat > bundle/run-guacd.sh <<'EOF'
           #!/usr/bin/env bash
           set -euo pipefail
+
           BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-          export LD_LIBRARY_PATH="${BASE_DIR}/lib:${BASE_DIR}/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
+
+          export LD_LIBRARY_PATH="${BASE_DIR}/lib:${LD_LIBRARY_PATH:-}"
+
           exec "${BASE_DIR}/bin/guacd" -f -b 127.0.0.1 -l 4822
           EOF
+
           chmod +x bundle/run-guacd.sh
+
+      - name: Show bundle contents
+        run: |
+          echo "Bundle structure:"
+          ls -R bundle
 
       - name: Archive bundle
         run: |
