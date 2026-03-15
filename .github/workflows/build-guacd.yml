@@ -1,0 +1,111 @@
+name: Build bundled guacd
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GUAC_VERSION: 1.6.0
+  PREFIX_DIR: /tmp/guac-install
+  ARTIFACT_NAME: guacd-linux-x86_64
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            libcairo2-dev \
+            libjpeg-turbo8-dev \
+            libpng-dev \
+            uuid-dev \
+            libavcodec-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libswscale-dev \
+            freerdp2-dev \
+            libpango1.0-dev \
+            libssh2-1-dev \
+            libtelnet-dev \
+            libvncserver-dev \
+            libwebsockets-dev \
+            libpulse-dev \
+            wget \
+            ca-certificates
+
+      - name: Download guacamole-server source
+        run: |
+          wget "https://archive.apache.org/dist/guacamole/${GUAC_VERSION}/source/guacamole-server-${GUAC_VERSION}.tar.gz"
+          tar -xzf "guacamole-server-${GUAC_VERSION}.tar.gz"
+
+      - name: Configure
+        working-directory: guacamole-server-${{ env.GUAC_VERSION }}
+        run: |
+          ./configure --prefix="${PREFIX_DIR}"
+
+      - name: Build
+        working-directory: guacamole-server-${{ env.GUAC_VERSION }}
+        run: |
+          make -j"$(nproc)"
+
+      - name: Install into staging prefix
+        working-directory: guacamole-server-${{ env.GUAC_VERSION }}
+        run: |
+          make install
+
+      - name: Collect runtime files
+        run: |
+          mkdir -p bundle/bin
+          mkdir -p bundle/lib
+          cp "${PREFIX_DIR}/sbin/guacd" bundle/bin/
+
+          # libguac + protocol libs
+          find "${PREFIX_DIR}/lib" -maxdepth 1 -type f \( -name "libguac*.so*" -o -name "libguac-client-rdp.so*" \) -exec cp -v {} bundle/lib/ \;
+
+          # optionale weitere vom Build installierte libs mitnehmen
+          find "${PREFIX_DIR}/lib/freerdp2" -type f -name "*.so*" -exec sh -c 'mkdir -p bundle/lib/freerdp2; cp -v "$1" bundle/lib/freerdp2/' _ {} \; || true
+
+      - name: Collect shared library dependencies
+        run: |
+          ldd bundle/bin/guacd | awk '/=> \// { print $3 }' | xargs -I '{}' cp -v --parents '{}' bundle/ || true
+          for f in bundle/lib/*.so*; do
+            ldd "$f" | awk '/=> \// { print $3 }' | xargs -I '{}' cp -v --parents '{}' bundle/ || true
+          done
+
+      - name: Create launcher
+        run: |
+          cat > bundle/run-guacd.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          export LD_LIBRARY_PATH="${BASE_DIR}/lib:${BASE_DIR}/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
+          exec "${BASE_DIR}/bin/guacd" -f -b 127.0.0.1 -l 4822
+          EOF
+          chmod +x bundle/run-guacd.sh
+
+      - name: Archive bundle
+        run: |
+          tar -czf "${ARTIFACT_NAME}.tar.gz" -C bundle .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_NAME }}.tar.gz
