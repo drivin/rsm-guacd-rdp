@@ -82,71 +82,56 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
+      - name: Install Cygwin
+        uses: cygwin/cygwin-install-action@v4
         with:
-          msystem: MINGW64
-          update: true
-          install: >
-            base-devel
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-cairo
-            mingw-w64-x86_64-freerdp
-            mingw-w64-x86_64-libpng
-            mingw-w64-x86_64-libjpeg-turbo
-            mingw-w64-x86_64-libssh2
-            mingw-w64-x86_64-libvncserver
-            mingw-w64-x86_64-pango
-            mingw-w64-x86_64-libwebsockets
-            mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-dlfcn
+          packages: >
+            gcc-core
+            gcc-g++
+            make
             autoconf
             automake
             libtool
-            make
+            pkg-config
+            libuuid-devel
+            freerdp-devel
+            cairo-devel
+            libpng-devel
+            libjpeg-devel
+            libssh2-devel
+            libwebsockets-devel
+            libvncserver-devel
             wget
 
       - name: Download source
-        shell: msys2 {0}
+        shell: C:\cygwin\bin\bash.exe -eo pipefail {0}
         run: |
           wget https://archive.apache.org/dist/guacamole/${GUAC_VERSION}/source/guacamole-server-${GUAC_VERSION}.tar.gz
           tar -xzf guacamole-server-${GUAC_VERSION}.tar.gz
 
       - name: Configure
-        shell: msys2 {0}
+        shell: C:\cygwin\bin\bash.exe -eo pipefail {0}
         run: |
           cd guacamole-server-${GUAC_VERSION}
-
-          # Windows hat kein timer_create()
-          export ac_cv_func_timer_create=yes
-
-          # libuuid Library Check überspringen
-          export ac_cv_lib_uuid_uuid_generate=yes
-
-          # dlopen über dlfcn
-          export LIBS="-ldl ${LIBS:-}"
-
-          ./configure \
-            --prefix=/mingw64 \
-            --disable-posix-timers
+          ./configure --prefix=/usr
 
       - name: Build
-        shell: msys2 {0}
+        shell: C:\cygwin\bin\bash.exe -eo pipefail {0}
         run: |
           cd guacamole-server-${GUAC_VERSION}
           make -j$(nproc)
 
       - name: Install
-        shell: msys2 {0}
+        shell: C:\cygwin\bin\bash.exe -eo pipefail {0}
         run: |
           cd guacamole-server-${GUAC_VERSION}
-          make install
+          make install DESTDIR=/tmp/guac
 
       - name: Bundle
-        shell: msys2 {0}
+        shell: C:\cygwin\bin\bash.exe -eo pipefail {0}
         run: |
           mkdir bundle
-          cp /mingw64/sbin/guacd.exe bundle/
+          cp /tmp/guac/usr/sbin/guacd.exe bundle/
 
       - name: Archive
         run: |
