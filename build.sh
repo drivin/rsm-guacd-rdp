@@ -102,6 +102,7 @@ COMPAT_DEST="$GUAC_SRC/compat-win32"
 mkdir -p "$COMPAT_DEST/uuid" "$COMPAT_DEST/sys" "$COMPAT_DEST/arpa" "$COMPAT_DEST/netinet"
 
 
+cp -v "$COMPAT_DIR/threads.h"           "$COMPAT_DEST/threads.h"
 cp -v "$COMPAT_DIR/fcntl.h"             "$COMPAT_DEST/fcntl.h"
 cp -v "$COMPAT_DIR/syslog.h"            "$COMPAT_DEST/syslog.h"
 cp -v "$COMPAT_DIR/libgen.h"            "$COMPAT_DEST/libgen.h"
