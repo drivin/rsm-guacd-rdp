@@ -11,3 +11,5 @@ guacd-bundle/
 build.log
 configure.log
 
+# Ignoe claude
+.claude
