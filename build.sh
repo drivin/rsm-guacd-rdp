@@ -253,8 +253,8 @@ export CPPFLAGS CFLAGS LDFLAGS LIBS
 
 # Cross-compile toolchain setup
 if [[ "$CROSS_COMPILE" == "1" ]]; then
-    export CC="clang --target=${HOST_TRIPLET}"
-    export CXX="clang++ --target=${HOST_TRIPLET}"
+    export CC="clang --target=${HOST_TRIPLET} -fuse-ld=lld -B${MINGW_PREFIX}/lib"
+    export CXX="clang++ --target=${HOST_TRIPLET} -fuse-ld=lld -B${MINGW_PREFIX}/lib"
     export AR="llvm-ar"
     export RANLIB="llvm-ranlib"
     export NM="llvm-nm"

@@ -79,11 +79,11 @@ cd guacd-bundle
 
 ## Windows Build (ARM64)
 
-Cross-compilation from an **x64 Windows machine** — kein ARM64-Gerät erforderlich.
+Cross-compilation from an **x64 Windows machine** — no ARM64 device required.
 
 ### Prerequisites
 
-- **Windows 10/11 64-bit** (AMD64 Build-Maschine)
+- **Windows 10/11 64-bit** (AMD64 build machine)
 - **MSYS2** — download from <https://www.msys2.org/>
   Install to the default path (`C:\msys64`).
 
@@ -107,7 +107,7 @@ The script opens an MSYS2 **MINGW64** shell (x64 host tools) and sets `GUACD_TAR
 | Host triplet | `x86_64-w64-mingw32` | `aarch64-w64-mingw32` |
 | Output bundle | `guacd-bundle\` | `guacd-bundle-arm64\` |
 
-`build.sh` erkennt `GUACD_TARGET_ARCH=arm64` und stellt Compiler, `pkg-config` und Linker-Pfade automatisch um. `patch-source.py` ist für beide Ziele identisch.
+`build.sh` detects `GUACD_TARGET_ARCH=arm64` and automatically switches the compiler, `pkg-config`, and linker paths. `patch-source.py` is identical for both targets.
 
 ### Collect the DLL bundle
 
