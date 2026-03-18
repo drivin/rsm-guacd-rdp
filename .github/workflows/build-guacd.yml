@@ -189,6 +189,17 @@ jobs:
         # Feed stdin from NUL so the "pause" returns immediately in CI.
         run: run-build-arm64.bat < nul
 
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-build-logs
+          path: |
+            guacamole-server-1.6.0\config.log
+            guacamole-server-1.6.0\build.log
+            configure.log
+          if-no-files-found: ignore
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
