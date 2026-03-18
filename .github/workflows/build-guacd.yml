@@ -68,10 +68,13 @@ jobs:
           cp ${DESTDIR}${PREFIX_DIR}/sbin/guacd bundle/bin/
           find ${DESTDIR}${PREFIX_DIR}/lib -name "*.so*" -exec cp {} bundle/lib/ \;
 
+      - name: Archive
+        run: tar -czf ${{ env.ARTIFACT_NAME }}.tar.gz -C bundle .
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          path: bundle/
+          path: ${{ env.ARTIFACT_NAME }}.tar.gz
 
 
   build-linux-arm64:
@@ -147,10 +150,13 @@ jobs:
           cp ${DESTDIR}${PREFIX_DIR}/sbin/guacd bundle/bin/
           find ${DESTDIR}${PREFIX_DIR}/lib -name "*.so*" -exec cp {} bundle/lib/ \;
 
+      - name: Archive
+        run: tar -czf ${{ env.ARTIFACT_NAME }}.tar.gz -C bundle .
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          path: bundle/
+          path: ${{ env.ARTIFACT_NAME }}.tar.gz
 
 
   build-windows:
@@ -168,8 +174,34 @@ jobs:
         # returns immediately in the non-interactive CI environment.
         run: run-build.bat < nul
 
+      - name: Archive bundle
+        shell: pwsh
+        run: Compress-Archive -Path guacd-bundle\* -DestinationPath ${{ env.ARTIFACT_NAME }}.zip
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          path: guacd-bundle\
+          path: ${{ env.ARTIFACT_NAME }}.zip
+
+
+  release:
+    needs: [build-linux, build-linux-arm64, build-windows]
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
 
