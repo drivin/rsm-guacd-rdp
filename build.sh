@@ -93,6 +93,7 @@ if [[ "$CROSS_COMPILE" == "1" ]]; then
     # Host tools: Clang cross-compiler (runs on x64, produces ARM64 output)
     HOST_PACKAGES=(
         mingw-w64-x86_64-clang          # clang/clang++ + llvm-ar/ranlib/nm/strip
+        mingw-w64-x86_64-lld            # lld linker (required for -fuse-ld=lld)
         mingw-w64-x86_64-pkgconf
         autoconf
         automake
