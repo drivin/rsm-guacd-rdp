@@ -3,16 +3,12 @@
 #
 # Build Apache Guacamole guacd 1.6.0 on Windows using MSYS2/MINGW64.
 #
-# Native x64 build (inside MSYS2 MINGW64 shell):
+# Usage (inside MSYS2 MINGW64 shell):
 #   bash build.sh
-#
-# Cross-compile ARM64 from x64 host (inside MSYS2 MINGW64 shell):
-#   GUACD_TARGET_ARCH=arm64 bash build.sh
 #
 # Output:
 #   guacamole-server-1.6.0/src/guacd/.libs/guacd.exe
-#   guacd-bundle/         (x64,  after running collect-dlls.sh)
-#   guacd-bundle-arm64/   (arm64, after running collect-dlls.sh)
+#   guacd-bundle/   (after running collect-dlls.sh)
 
 set -euo pipefail
 
@@ -36,51 +32,17 @@ OVERRIDES_DIR="$SCRIPT_DIR/src-overrides"
 
 echo "=== Step 0: Checking environment ==="
 
-TARGET_ARCH="${GUACD_TARGET_ARCH:-native}"   # "native" or "arm64"
-
-if [[ "$TARGET_ARCH" == "arm64" ]]; then
-    # ---- Cross-compile ARM64 from x64 host --------------------------------
-    # Must run inside MINGW64 (x64 host tools).
-    # ARM64 target libraries are taken from the CLANGARM64 prefix (/clangarm64).
-    if [[ "${MSYSTEM:-}" != "MINGW64" ]]; then
-        echo "ERROR: Cross-compiling ARM64 requires the MSYS2 MINGW64 shell (x64 host)."
-        echo "  Open 'MSYS2 MinGW 64-bit' from the Start menu and try again."
-        exit 1
-    fi
-    CROSS_COMPILE=1
-    HOST_TRIPLET="aarch64-w64-mingw32"   # target (what we build for)
-    BUILD_TRIPLET="x86_64-w64-mingw32"   # build machine (where we compile)
-    MINGW_PREFIX="/clangarm64"            # target prefix (ARM64 libraries)
-    HOST_PREFIX="/mingw64"               # host prefix  (x64 tools)
-    PKG_PREFIX="mingw-w64-clang-aarch64" # target package prefix
-    echo "OK - Cross-compiling: ${BUILD_TRIPLET} → ${HOST_TRIPLET}"
-else
-    # ---- Native build: detect architecture from MSYSTEM -------------------
-    CROSS_COMPILE=0
-    BUILD_TRIPLET=""
-    case "${MSYSTEM:-}" in
-        MINGW64)
-            MINGW_PREFIX="/mingw64"
-            HOST_PREFIX="/mingw64"
-            PKG_PREFIX="mingw-w64-x86_64"
-            HOST_TRIPLET="x86_64-w64-mingw32"
-            ;;
-        CLANGARM64)
-            MINGW_PREFIX="/clangarm64"
-            HOST_PREFIX="/clangarm64"
-            PKG_PREFIX="mingw-w64-clang-aarch64"
-            HOST_TRIPLET="aarch64-w64-mingw32"
-            ;;
-        *)
-            echo "ERROR: This script must be run inside the MSYS2 MINGW64 or CLANGARM64 shell."
-            echo "  For x64:             Open 'MSYS2 MinGW 64-bit' from the Start menu."
-            echo "  For ARM64 (native):  Open 'MSYS2 CLANG ARM64' from the Start menu."
-            echo "  For ARM64 (cross):   Open 'MSYS2 MinGW 64-bit' and set GUACD_TARGET_ARCH=arm64."
-            exit 1
-            ;;
-    esac
-    echo "OK - Native build: MSYSTEM=$MSYSTEM  HOST=$HOST_TRIPLET  PREFIX=$MINGW_PREFIX"
+if [[ "${MSYSTEM:-}" != "MINGW64" ]]; then
+    echo "ERROR: This script must be run inside the MSYS2 MINGW64 shell."
+    echo "  Open 'MSYS2 MinGW 64-bit' from the Start menu and try again."
+    exit 1
 fi
+
+MINGW_PREFIX="/mingw64"
+PKG_PREFIX="mingw-w64-x86_64"
+HOST_TRIPLET="x86_64-w64-mingw32"
+
+echo "OK - Native build: MSYSTEM=$MSYSTEM  HOST=$HOST_TRIPLET  PREFIX=$MINGW_PREFIX"
 
 # ---------------------------------------------------------------------------
 # 1. Install MSYS2 packages
@@ -89,48 +51,23 @@ fi
 echo ""
 echo "=== Step 1: Installing MSYS2/MINGW64 packages ==="
 
-if [[ "$CROSS_COMPILE" == "1" ]]; then
-    # Host tools: Clang cross-compiler (runs on x64, produces ARM64 output)
-    HOST_PACKAGES=(
-        mingw-w64-x86_64-clang          # clang/clang++ + llvm-ar/ranlib/nm/strip
-        mingw-w64-x86_64-lld            # lld linker (required for -fuse-ld=lld)
-        mingw-w64-x86_64-pkgconf
-        autoconf
-        automake
-        libtool
-        make
-        wget
-        python3
-    )
-    # Target libraries: ARM64 binaries/headers (installed into /clangarm64/)
-    TARGET_PACKAGES=(
-        "${PKG_PREFIX}-freerdp"
-        "${PKG_PREFIX}-cairo"
-        "${PKG_PREFIX}-libpng"
-        "${PKG_PREFIX}-libjpeg-turbo"
-        "${PKG_PREFIX}-openssl"
-        "${PKG_PREFIX}-dlfcn"
-    )
-    pacman -S --needed --noconfirm "${HOST_PACKAGES[@]}" "${TARGET_PACKAGES[@]}"
-else
-    PACKAGES=(
-        "${PKG_PREFIX}-toolchain"
-        "${PKG_PREFIX}-freerdp"
-        "${PKG_PREFIX}-cairo"
-        "${PKG_PREFIX}-libpng"
-        "${PKG_PREFIX}-libjpeg-turbo"
-        "${PKG_PREFIX}-openssl"
-        "${PKG_PREFIX}-dlfcn"        # provides dlopen/dlsym/dlclose
-        "${PKG_PREFIX}-pkgconf"
-        autoconf
-        automake
-        libtool
-        make
-        wget
-        python3
-    )
-    pacman -S --needed --noconfirm "${PACKAGES[@]}"
-fi
+PACKAGES=(
+    "${PKG_PREFIX}-toolchain"
+    "${PKG_PREFIX}-freerdp"
+    "${PKG_PREFIX}-cairo"
+    "${PKG_PREFIX}-libpng"
+    "${PKG_PREFIX}-libjpeg-turbo"
+    "${PKG_PREFIX}-openssl"
+    "${PKG_PREFIX}-dlfcn"        # provides dlopen/dlsym/dlclose
+    "${PKG_PREFIX}-pkgconf"
+    autoconf
+    automake
+    libtool
+    make
+    wget
+    python3
+)
+pacman -S --needed --noconfirm "${PACKAGES[@]}"
 
 echo "Packages installed."
 
@@ -252,21 +189,6 @@ CFLAGS="-Wno-pedantic"
 
 export CPPFLAGS CFLAGS LDFLAGS LIBS
 
-# Cross-compile toolchain setup
-if [[ "$CROSS_COMPILE" == "1" ]]; then
-    export CC="clang --target=${HOST_TRIPLET} -fuse-ld=lld -B${MINGW_PREFIX}/lib"
-    export CXX="clang++ --target=${HOST_TRIPLET} -fuse-ld=lld -B${MINGW_PREFIX}/lib"
-    export AR="llvm-ar"
-    export RANLIB="llvm-ranlib"
-    export NM="llvm-nm"
-    export STRIP="llvm-strip"
-    # Point pkg-config to the ARM64 target libraries
-    export PKG_CONFIG="${HOST_PREFIX}/bin/pkgconf"
-    export PKG_CONFIG_PATH="${MINGW_PREFIX}/lib/pkgconfig"
-    export PKG_CONFIG_LIBDIR="${MINGW_PREFIX}/lib/pkgconfig"
-    echo "Cross-compile toolchain: CC=$CC  AR=$AR"
-fi
-
 # Build the configure argument list
 CONFIGURE_ARGS=(
     "--prefix=${MINGW_PREFIX}"
@@ -281,11 +203,6 @@ CONFIGURE_ARGS=(
     "--disable-guacenc"
     "--disable-guaclog"
 )
-
-# Tell autoconf the build machine when cross-compiling
-if [[ "$CROSS_COMPILE" == "1" ]]; then
-    CONFIGURE_ARGS+=("--build=${BUILD_TRIPLET}")
-fi
 
 ./configure "${CONFIGURE_ARGS[@]}" 2>&1 | tee ../configure.log
 
@@ -340,7 +257,6 @@ fi
 cd ..
 
 BUNDLE_DIR="guacd-bundle"
-[[ "$TARGET_ARCH" == "arm64" ]] && BUNDLE_DIR="guacd-bundle-arm64"
 
 echo ""
 echo "==================================================================="

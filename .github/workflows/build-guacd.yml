@@ -173,34 +173,3 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}
           path: guacd-bundle\
 
-
-  build-windows-arm64:
-    runs-on: windows-2022
-
-    env:
-      ARTIFACT_NAME: guacd-windows-arm64
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run cross-compile build (x64 host → ARM64 target)
-        shell: cmd
-        # GUACD_TARGET_ARCH=arm64 is set inside run-build-arm64.bat.
-        # Feed stdin from NUL so the "pause" returns immediately in CI.
-        run: run-build-arm64.bat < nul
-
-      - name: Upload logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: arm64-build-logs
-          path: |
-            guacamole-server-1.6.0\config.log
-            guacamole-server-1.6.0\build.log
-            configure.log
-          if-no-files-found: ignore
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ARTIFACT_NAME }}
-          path: guacd-bundle-arm64\

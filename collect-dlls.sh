@@ -7,30 +7,12 @@
 # Usage (inside MSYS2 MINGW64 shell):
 #   bash collect-dlls.sh [bundle-dir]
 #
-# For ARM64 cross-compiled binaries, set GUACD_TARGET_ARCH=arm64:
-#   GUACD_TARGET_ARCH=arm64 bash collect-dlls.sh [bundle-dir]
-#
-# Default bundle directory:
-#   x64:   guacd-bundle/
-#   arm64: guacd-bundle-arm64/
+# Default bundle directory: guacd-bundle/
 
 set -euo pipefail
 
-TARGET_ARCH="${GUACD_TARGET_ARCH:-native}"
-
-case "$TARGET_ARCH" in
-    arm64)
-        MINGW_BIN="/clangarm64/bin"
-        DEFAULT_BUNDLE="guacd-bundle-arm64"
-        ;;
-    *)
-        # Native: detect from MSYSTEM
-        case "${MSYSTEM:-MINGW64}" in
-            CLANGARM64) MINGW_BIN="/clangarm64/bin" ; DEFAULT_BUNDLE="guacd-bundle-arm64" ;;
-            *)          MINGW_BIN="/mingw64/bin"    ; DEFAULT_BUNDLE="guacd-bundle"       ;;
-        esac
-        ;;
-esac
+MINGW_BIN="/mingw64/bin"
+DEFAULT_BUNDLE="guacd-bundle"
 
 BUNDLE="${1:-$DEFAULT_BUNDLE}"
 GUACD_EXE="guacamole-server-1.6.0/src/guacd/.libs/guacd.exe"
@@ -45,13 +27,6 @@ fi
 
 mkdir -p "$BUNDLE"
 cp -v "$GUACD_EXE" "$BUNDLE/"
-
-# When cross-compiling ARM64 on an x64 host (MINGW64), ldd searches DLLs via
-# PATH which only contains /mingw64/bin.  Prepend the target prefix so ldd
-# can resolve ARM64 DLL names to actual paths in /clangarm64/bin.
-if [[ "$MINGW_BIN" != "/mingw64/bin" ]]; then
-    export PATH="$MINGW_BIN:$PATH"
-fi
 
 # ---- Resolve DLL dependencies recursively using ldd -----------------------
 echo ""
