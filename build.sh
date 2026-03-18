@@ -3,13 +3,16 @@
 #
 # Build Apache Guacamole guacd 1.6.0 on Windows using MSYS2/MINGW64.
 #
-# Run this script INSIDE the MSYS2 MINGW64 shell:
-#   cd /path/to/guacd-windows-build
+# Native x64 build (inside MSYS2 MINGW64 shell):
 #   bash build.sh
+#
+# Cross-compile ARM64 from x64 host (inside MSYS2 MINGW64 shell):
+#   GUACD_TARGET_ARCH=arm64 bash build.sh
 #
 # Output:
 #   guacamole-server-1.6.0/src/guacd/.libs/guacd.exe
-#   guacd-bundle/   (portable bundle with DLLs; requires running collect-dlls.sh)
+#   guacd-bundle/         (x64,  after running collect-dlls.sh)
+#   guacd-bundle-arm64/   (arm64, after running collect-dlls.sh)
 
 set -euo pipefail
 
@@ -28,16 +31,56 @@ COMPAT_DIR="$SCRIPT_DIR/compat"
 OVERRIDES_DIR="$SCRIPT_DIR/src-overrides"
 
 # ---------------------------------------------------------------------------
-# 0. Sanity check: must be running inside MINGW64
+# 0. Environment detection: native build vs. cross-compile
 # ---------------------------------------------------------------------------
 
 echo "=== Step 0: Checking environment ==="
-if [[ "${MSYSTEM:-}" != "MINGW64" ]]; then
-    echo "ERROR: This script must be run inside the MSYS2 MINGW64 shell."
-    echo "  Open 'MSYS2 MinGW 64-bit' from the Start menu and try again."
-    exit 1
+
+TARGET_ARCH="${GUACD_TARGET_ARCH:-native}"   # "native" or "arm64"
+
+if [[ "$TARGET_ARCH" == "arm64" ]]; then
+    # ---- Cross-compile ARM64 from x64 host --------------------------------
+    # Must run inside MINGW64 (x64 host tools).
+    # ARM64 target libraries are taken from the CLANGARM64 prefix (/clangarm64).
+    if [[ "${MSYSTEM:-}" != "MINGW64" ]]; then
+        echo "ERROR: Cross-compiling ARM64 requires the MSYS2 MINGW64 shell (x64 host)."
+        echo "  Open 'MSYS2 MinGW 64-bit' from the Start menu and try again."
+        exit 1
+    fi
+    CROSS_COMPILE=1
+    HOST_TRIPLET="aarch64-w64-mingw32"   # target (what we build for)
+    BUILD_TRIPLET="x86_64-w64-mingw32"   # build machine (where we compile)
+    MINGW_PREFIX="/clangarm64"            # target prefix (ARM64 libraries)
+    HOST_PREFIX="/mingw64"               # host prefix  (x64 tools)
+    PKG_PREFIX="mingw-w64-clang-aarch64" # target package prefix
+    echo "OK - Cross-compiling: ${BUILD_TRIPLET} → ${HOST_TRIPLET}"
+else
+    # ---- Native build: detect architecture from MSYSTEM -------------------
+    CROSS_COMPILE=0
+    BUILD_TRIPLET=""
+    case "${MSYSTEM:-}" in
+        MINGW64)
+            MINGW_PREFIX="/mingw64"
+            HOST_PREFIX="/mingw64"
+            PKG_PREFIX="mingw-w64-x86_64"
+            HOST_TRIPLET="x86_64-w64-mingw32"
+            ;;
+        CLANGARM64)
+            MINGW_PREFIX="/clangarm64"
+            HOST_PREFIX="/clangarm64"
+            PKG_PREFIX="mingw-w64-clang-aarch64"
+            HOST_TRIPLET="aarch64-w64-mingw32"
+            ;;
+        *)
+            echo "ERROR: This script must be run inside the MSYS2 MINGW64 or CLANGARM64 shell."
+            echo "  For x64:             Open 'MSYS2 MinGW 64-bit' from the Start menu."
+            echo "  For ARM64 (native):  Open 'MSYS2 CLANG ARM64' from the Start menu."
+            echo "  For ARM64 (cross):   Open 'MSYS2 MinGW 64-bit' and set GUACD_TARGET_ARCH=arm64."
+            exit 1
+            ;;
+    esac
+    echo "OK - Native build: MSYSTEM=$MSYSTEM  HOST=$HOST_TRIPLET  PREFIX=$MINGW_PREFIX"
 fi
-echo "OK - MSYSTEM=$MSYSTEM"
 
 # ---------------------------------------------------------------------------
 # 1. Install MSYS2 packages
@@ -46,24 +89,47 @@ echo "OK - MSYSTEM=$MSYSTEM"
 echo ""
 echo "=== Step 1: Installing MSYS2/MINGW64 packages ==="
 
-PACKAGES=(
-    mingw-w64-x86_64-toolchain
-    mingw-w64-x86_64-freerdp
-    mingw-w64-x86_64-cairo
-    mingw-w64-x86_64-libpng
-    mingw-w64-x86_64-libjpeg-turbo
-    mingw-w64-x86_64-openssl
-    mingw-w64-x86_64-dlfcn       # provides dlopen/dlsym/dlclose for MINGW64
-    mingw-w64-x86_64-pkgconf
-    autoconf
-    automake
-    libtool
-    make
-    wget
-    python3
-)
-
-pacman -S --needed --noconfirm "${PACKAGES[@]}"
+if [[ "$CROSS_COMPILE" == "1" ]]; then
+    # Host tools: Clang cross-compiler (runs on x64, produces ARM64 output)
+    HOST_PACKAGES=(
+        mingw-w64-x86_64-clang          # clang/clang++ + llvm-ar/ranlib/nm/strip
+        mingw-w64-x86_64-pkgconf
+        autoconf
+        automake
+        libtool
+        make
+        wget
+        python3
+    )
+    # Target libraries: ARM64 binaries/headers (installed into /clangarm64/)
+    TARGET_PACKAGES=(
+        "${PKG_PREFIX}-freerdp"
+        "${PKG_PREFIX}-cairo"
+        "${PKG_PREFIX}-libpng"
+        "${PKG_PREFIX}-libjpeg-turbo"
+        "${PKG_PREFIX}-openssl"
+        "${PKG_PREFIX}-dlfcn"
+    )
+    pacman -S --needed --noconfirm "${HOST_PACKAGES[@]}" "${TARGET_PACKAGES[@]}"
+else
+    PACKAGES=(
+        "${PKG_PREFIX}-toolchain"
+        "${PKG_PREFIX}-freerdp"
+        "${PKG_PREFIX}-cairo"
+        "${PKG_PREFIX}-libpng"
+        "${PKG_PREFIX}-libjpeg-turbo"
+        "${PKG_PREFIX}-openssl"
+        "${PKG_PREFIX}-dlfcn"        # provides dlopen/dlsym/dlclose
+        "${PKG_PREFIX}-pkgconf"
+        autoconf
+        automake
+        libtool
+        make
+        wget
+        python3
+    )
+    pacman -S --needed --noconfirm "${PACKAGES[@]}"
+fi
 
 echo "Packages installed."
 
@@ -81,8 +147,6 @@ else
 fi
 
 # Always re-extract to get a clean, unpatched source tree.
-# This ensures patch-source.py is never applied twice to the same files.
-# The tarball is cached above so this is fast.
 if [[ -d "$GUAC_SRC" ]]; then
     echo "Removing existing source directory for clean extraction..."
     rm -rf "$GUAC_SRC"
@@ -97,7 +161,6 @@ tar -xzf "$GUAC_TARBALL"
 echo ""
 echo "=== Step 3: Installing compatibility headers ==="
 
-# Copy the compat/ tree so configure and make can find the stubs via -I
 COMPAT_DEST="$GUAC_SRC/compat-win32"
 mkdir -p "$COMPAT_DEST/uuid" "$COMPAT_DEST/sys" "$COMPAT_DEST/arpa" "$COMPAT_DEST/netinet"
 
@@ -154,12 +217,11 @@ if [[ ! -f configure ]]; then
 fi
 
 # Override autoconf cache variables for features that don't exist on Windows
-# but whose absence would abort the build.  Our source overrides provide
-# compatible replacements, so we tell configure the functions "exist".
+# but whose absence would abort the build.
 export ac_cv_func_fork=yes
 export ac_cv_func_vfork=yes
 export ac_cv_func_socketpair=yes
-export ac_cv_func_timer_create=yes      # disabled anyway; just avoids abort
+export ac_cv_func_timer_create=yes
 export ac_cv_func_timer_settime=yes
 export ac_cv_func_uuid_generate=yes
 export ac_cv_lib_uuid_uuid_generate=yes
@@ -171,44 +233,60 @@ export ac_cv_func_getpwnam_r=yes
 export ac_cv_func_kill=yes
 export ac_cv_func_waitpid=yes
 export ac_cv_func_sigaction=yes
-export ac_cv_lib_dl_dlopen=yes   # dlfcn provided by mingw-w64-x86_64-dlfcn
+export ac_cv_lib_dl_dlopen=yes
 export ac_cv_func_dlopen=yes
 
-# Extra compiler flags
-#   -I compat-win32   → our stub headers shadow system paths
-#   -DWINVER etc.     → ensure WinSock2 targets modern Windows
-# NOTE: do NOT add -include windows.h here — it breaks the autoconf
-# undeclared-builtin check. display.c is patched individually instead.
+# Compiler flags
 CPPFLAGS="-I$(pwd)/compat-win32 \
+          -I${MINGW_PREFIX}/include \
           -DWINVER=0x0601 \
           -D_WIN32_WINNT=0x0601 \
           -D_WIN32"
 
-# Link against winsock2, ole32 (for CoCreateGuid), and dl (for dlopen/dlsym)
+LDFLAGS="-L${MINGW_PREFIX}/lib"
+
 LIBS="-lws2_32 -lole32 -ldl"
 
-# CFLAGS for configure: keep minimal — -include breaks autoconf's undeclared-
-# builtin detection test ("cannot make gcc report undeclared builtins").
-# -Wno-pedantic: needed because compat/fcntl.h uses #include_next (GCC ext).
 CFLAGS="-Wno-pedantic"
 
-export CPPFLAGS CFLAGS LIBS
+export CPPFLAGS CFLAGS LDFLAGS LIBS
 
-./configure \
-    --prefix=/mingw64 \
-    --host=x86_64-w64-mingw32 \
-    --without-vnc \
-    --without-ssh \
-    --without-telnet \
-    --without-kubernetes \
-    --without-pulse \
-    --without-vorbis \
-    --without-webp \
-    --disable-guacenc \
-    --disable-guaclog \
-    2>&1 | tee ../configure.log
-# NOTE: --disable-posix-timers is not a valid configure flag in 1.6.0;
-# POSIX timer absence is handled via ac_cv_func_timer_create=yes (exported above).
+# Cross-compile toolchain setup
+if [[ "$CROSS_COMPILE" == "1" ]]; then
+    export CC="clang --target=${HOST_TRIPLET}"
+    export CXX="clang++ --target=${HOST_TRIPLET}"
+    export AR="llvm-ar"
+    export RANLIB="llvm-ranlib"
+    export NM="llvm-nm"
+    export STRIP="llvm-strip"
+    # Point pkg-config to the ARM64 target libraries
+    export PKG_CONFIG="${HOST_PREFIX}/bin/pkgconf"
+    export PKG_CONFIG_PATH="${MINGW_PREFIX}/lib/pkgconfig"
+    export PKG_CONFIG_LIBDIR="${MINGW_PREFIX}/lib/pkgconfig"
+    echo "Cross-compile toolchain: CC=$CC  AR=$AR"
+fi
+
+# Build the configure argument list
+CONFIGURE_ARGS=(
+    "--prefix=${MINGW_PREFIX}"
+    "--host=${HOST_TRIPLET}"
+    "--without-vnc"
+    "--without-ssh"
+    "--without-telnet"
+    "--without-kubernetes"
+    "--without-pulse"
+    "--without-vorbis"
+    "--without-webp"
+    "--disable-guacenc"
+    "--disable-guaclog"
+)
+
+# Tell autoconf the build machine when cross-compiling
+if [[ "$CROSS_COMPILE" == "1" ]]; then
+    CONFIGURE_ARGS+=("--build=${BUILD_TRIPLET}")
+fi
+
+./configure "${CONFIGURE_ARGS[@]}" 2>&1 | tee ../configure.log
 
 echo ""
 echo "Configure complete. Check configure.log for details."
@@ -219,7 +297,7 @@ if grep -q "guacd-rdp.*yes" ../configure.log 2>/dev/null || \
     echo "  RDP: ENABLED"
 else
     echo "  WARNING: RDP may not be enabled. Check configure.log."
-    echo "  Ensure mingw-w64-x86_64-freerdp is installed and pkg-config can find it."
+    echo "  Ensure ${PKG_PREFIX}-freerdp is installed and pkg-config can find it."
 fi
 
 # ---------------------------------------------------------------------------
@@ -229,9 +307,6 @@ fi
 echo ""
 echo "=== Step 7: Building (make -j$(nproc)) ==="
 
-# Add -include windows-posix.h here (not at configure time) so autoconf
-# builtin detection is not disturbed.  This injects our POSIX stubs into
-# every translation unit compiled by make without touching source files.
 make -j"$(nproc)" \
     CFLAGS="-Wno-pedantic -Wno-deprecated-declarations -include $(pwd)/compat-win32/windows-posix.h" \
     2>&1 | tee ../build.log
@@ -263,15 +338,18 @@ fi
 
 cd ..
 
+BUNDLE_DIR="guacd-bundle"
+[[ "$TARGET_ARCH" == "arm64" ]] && BUNDLE_DIR="guacd-bundle-arm64"
+
 echo ""
 echo "==================================================================="
 echo " Build complete!"
 echo "==================================================================="
 echo ""
 echo " Next step - collect the portable bundle:"
-echo "   bash collect-dlls.sh"
+echo "   GUACD_TARGET_ARCH=${TARGET_ARCH} bash collect-dlls.sh"
 echo ""
 echo " Then run guacd:"
-echo "   cd guacd-bundle"
+echo "   cd ${BUNDLE_DIR}"
 echo "   ./guacd.exe -f -b 127.0.0.1 -l 4822"
 echo ""

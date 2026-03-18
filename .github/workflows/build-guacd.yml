@@ -68,14 +68,89 @@ jobs:
           cp ${DESTDIR}${PREFIX_DIR}/sbin/guacd bundle/bin/
           find ${DESTDIR}${PREFIX_DIR}/lib -name "*.so*" -exec cp {} bundle/lib/ \;
 
-      - name: Archive
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: bundle/
+
+
+  build-linux-arm64:
+    runs-on: ubuntu-24.04
+
+    env:
+      ARTIFACT_NAME: guacd-linux-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable ARM64 architecture and add package sources
         run: |
-          tar -czf ${ARTIFACT_NAME}.tar.gz -C bundle .
+          sudo dpkg --add-architecture arm64
+          # Restrict existing deb822 sources to amd64 to prevent 404s from the
+          # main Ubuntu mirror (which only serves amd64/i386).
+          sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' \
+            /etc/apt/sources.list.d/ubuntu.sources
+          # Add Ubuntu Ports as source for arm64 packages.
+          sudo tee /etc/apt/sources.list.d/ubuntu-ports-arm64.sources > /dev/null << 'EOF'
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports
+          Suites: noble noble-updates noble-security
+          Components: main restricted universe multiverse
+          Architectures: arm64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+          sudo apt-get update
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu pkg-config \
+            autoconf automake libtool curl ca-certificates \
+            libcairo2-dev:arm64 libjpeg-turbo8-dev:arm64 libpng-dev:arm64 uuid-dev:arm64 \
+            libavcodec-dev:arm64 libavformat-dev:arm64 libavutil-dev:arm64 libswscale-dev:arm64 \
+            freerdp2-dev:arm64 libpango1.0-dev:arm64 libssh2-1-dev:arm64 libtelnet-dev:arm64 \
+            libvncserver-dev:arm64 libwebsockets-dev:arm64 libpulse-dev:arm64
+
+      - name: Download guacamole-server
+        run: |
+          VERSION=$(echo "$GUAC_VERSION" | tr -d '\r\n')
+          echo "Downloading Guacamole $VERSION"
+          curl -fL -o guacamole.tar.gz "https://archive.apache.org/dist/guacamole/${VERSION}/source/guacamole-server-${VERSION}.tar.gz"
+          tar -xzf guacamole.tar.gz
+
+      - name: Configure
+        run: |
+          VERSION=$(echo "$GUAC_VERSION" | tr -d '\r\n')
+          cd guacamole-server-${VERSION}
+          PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
+          PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig \
+          ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=${PREFIX_DIR}
+
+      - name: Build
+        run: |
+          VERSION=$(echo "$GUAC_VERSION" | tr -d '\r\n')
+          cd guacamole-server-${VERSION}
+          make -j$(nproc)
+
+      - name: Install
+        run: |
+          VERSION=$(echo "$GUAC_VERSION" | tr -d '\r\n')
+          cd guacamole-server-${VERSION}
+          make DESTDIR=${DESTDIR} install
+
+      - name: Bundle
+        run: |
+          mkdir -p bundle/bin bundle/lib
+          cp ${DESTDIR}${PREFIX_DIR}/sbin/guacd bundle/bin/
+          find ${DESTDIR}${PREFIX_DIR}/lib -name "*.so*" -exec cp {} bundle/lib/ \;
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          path: ${{ env.ARTIFACT_NAME }}.tar.gz
+          path: bundle/
 
 
   build-windows:
@@ -93,11 +168,28 @@ jobs:
         # returns immediately in the non-interactive CI environment.
         run: run-build.bat < nul
 
-      - name: Archive bundle
-        shell: pwsh
-        run: Compress-Archive -Path guacd-bundle\* -DestinationPath ${{ env.ARTIFACT_NAME }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: guacd-bundle\
+
+
+  build-windows-arm64:
+    runs-on: windows-2022
+
+    env:
+      ARTIFACT_NAME: guacd-windows-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run cross-compile build (x64 host → ARM64 target)
+        shell: cmd
+        # GUACD_TARGET_ARCH=arm64 is set inside run-build-arm64.bat.
+        # Feed stdin from NUL so the "pause" returns immediately in CI.
+        run: run-build-arm64.bat < nul
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          path: ${{ env.ARTIFACT_NAME }}.zip
+          path: guacd-bundle-arm64\
