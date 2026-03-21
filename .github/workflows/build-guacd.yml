@@ -193,15 +193,24 @@ jobs:
       contents: write
 
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          path: artifacts
-          merge-multiple: true
+          name: guacd-linux-x86_64
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: guacd-linux-arm64
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: guacd-windows-x86_64
+          path: dist
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*
+          files: dist/*
           generate_release_notes: true
 

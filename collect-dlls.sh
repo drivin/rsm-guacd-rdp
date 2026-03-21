@@ -41,11 +41,33 @@ collect_dlls() {
         | sort -u
 }
 
-# Seed with direct dependencies of guacd.exe
+# ---- Copy protocol plugins (dynamically loaded via lt_dlopen, not in ldd) --
+echo ""
+echo "Copying protocol plugins ..."
+echo ""
+
+plugin_bins=()
+while IFS= read -r plugin; do
+    name="$(basename "$plugin")"
+    cp -v "$plugin" "$BUNDLE/"
+    plugin_bins+=("$BUNDLE/$name")
+done < <(find "$GUAC_SRC/src/protocols" -path '*/.libs/libguac-client-*.dll' 2>/dev/null)
+
+if [[ ${#plugin_bins[@]} -eq 0 ]]; then
+    echo "WARNING: No protocol plugins found in $GUAC_SRC/src/protocols"
+fi
+
+# Seed BFS with guacd.exe + all plugins
 pending=()
 while IFS= read -r dll; do
     pending+=("$dll")
 done < <(collect_dlls "$BUNDLE/guacd.exe")
+
+for plugin in "${plugin_bins[@]}"; do
+    while IFS= read -r dll; do
+        pending+=("$dll")
+    done < <(collect_dlls "$plugin")
+done
 
 # BFS over transitive dependencies
 declare -A visited
