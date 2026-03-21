@@ -13,9 +13,10 @@ set -euo pipefail
 
 MINGW_BIN="/mingw64/bin"
 DEFAULT_BUNDLE="guacd-bundle"
+GUAC_SRC="guacamole-server-1.6.0"
 
 BUNDLE="${1:-$DEFAULT_BUNDLE}"
-GUACD_EXE="guacamole-server-1.6.0/src/guacd/.libs/guacd.exe"
+GUACD_EXE="${GUAC_SRC}/src/guacd/.libs/guacd.exe"
 
 echo "=== Collecting guacd bundle into: $BUNDLE (DLL source: $MINGW_BIN) ==="
 
