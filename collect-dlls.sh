@@ -50,12 +50,18 @@ echo ""
 plugin_bins=()
 while IFS= read -r plugin; do
     name="$(basename "$plugin")"
-    cp -v "$plugin" "$BUNDLE/"
-    plugin_bins+=("$BUNDLE/$name")
-done < <(find "$GUAC_SRC/src/protocols" -path '*/.libs/libguac-client-*.dll' 2>/dev/null)
+    # Strip libtool version suffix: libguac-client-rdp-0.dll → libguac-client-rdp.dll
+    # guacd loads plugins via dlopen("libguac-client-rdp") → expects unversioned name.
+    canonical="$(echo "$name" | sed 's/-[0-9]\+\.dll$/.dll/')"
+    cp -v "$plugin" "$BUNDLE/$canonical"
+    plugin_bins+=("$BUNDLE/$canonical")
+done < <(find "$GUAC_SRC/src/protocols" -path '*/.libs/libguac-client-*.dll' ! -name '*.dll.a' 2>/dev/null)
 
 if [[ ${#plugin_bins[@]} -eq 0 ]]; then
-    echo "WARNING: No protocol plugins found in $GUAC_SRC/src/protocols"
+    echo "ERROR: No protocol plugins found in $GUAC_SRC/src/protocols"
+    echo "Expected: $GUAC_SRC/src/protocols/rdp/.libs/libguac-client-rdp.dll"
+    echo "Run build.sh first and ensure RDP compiled successfully."
+    exit 1
 fi
 
 # Seed BFS with guacd.exe + all plugins

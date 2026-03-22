@@ -131,6 +131,20 @@ cp -v "$OVERRIDES_DIR/proc-win32.c"   "$GUAC_SRC/src/guacd/proc.c"
 cp -v "$OVERRIDES_DIR/proc-win32.h"   "$GUAC_SRC/src/guacd/proc.h"
 cp -v "$OVERRIDES_DIR/move-fd-win32.c" "$GUAC_SRC/src/guacd/move-fd.c"
 
+# Patch Makefile.am files to add -no-undefined so libtool builds shared DLLs
+# on Windows (MinGW64 requires all symbols resolved at link time).
+echo "Patching Makefile.am files with -no-undefined..."
+for makefile_am in \
+    "$GUAC_SRC/src/libguac/Makefile.am" \
+    "$GUAC_SRC/src/common/Makefile.am" \
+    "$GUAC_SRC/src/terminal/Makefile.am" \
+    "$GUAC_SRC/src/protocols/rdp/Makefile.am"; do
+    if [[ -f "$makefile_am" ]]; then
+        sed -i 's/_la_LDFLAGS\s*=/_la_LDFLAGS = -no-undefined /g' "$makefile_am"
+        echo "  patched: $makefile_am"
+    fi
+done
+
 # ---------------------------------------------------------------------------
 # 5. Apply Python patches to connection.c and daemon.c
 # ---------------------------------------------------------------------------
@@ -149,10 +163,7 @@ echo "=== Step 6: Running autoreconf + configure ==="
 
 cd "$GUAC_SRC"
 
-# Run autoreconf if configure doesn't exist yet
-if [[ ! -f configure ]]; then
-    autoreconf -fi
-fi
+autoreconf -fi
 
 # Override autoconf cache variables for features that don't exist on Windows
 # but whose absence would abort the build.
@@ -196,7 +207,7 @@ CONFIGURE_ARGS=(
     "--without-vnc"
     "--without-ssh"
     "--without-telnet"
-    "--without-kubernetes"
+    "--disable-kubernetes"
     "--without-pulse"
     "--without-vorbis"
     "--without-webp"
@@ -206,16 +217,23 @@ CONFIGURE_ARGS=(
 
 ./configure "${CONFIGURE_ARGS[@]}" 2>&1 | tee ../configure.log
 
+# Remove -luuid from libguac's generated Makefile.
+# libuuid is static-only on MSYS2; our compat header provides uuid_generate
+# inline via CoCreateGuid so the library is not needed at link time.
+echo "Removing -luuid from src/libguac/Makefile..."
+sed -i 's/ -luuid//g' src/libguac/Makefile
+
 echo ""
 echo "Configure complete. Check configure.log for details."
 echo "Verifying RDP support was detected..."
-if grep -q "guacd-rdp.*yes" ../configure.log 2>/dev/null || \
-   grep -q "RDP.*enabled" ../configure.log 2>/dev/null || \
-   grep -q "libfreerdp.*yes" ../configure.log 2>/dev/null; then
+if grep -qi "rdp.*yes" ../configure.log 2>/dev/null || \
+   grep -qi "freerdp.*yes" ../configure.log 2>/dev/null; then
     echo "  RDP: ENABLED"
 else
-    echo "  WARNING: RDP may not be enabled. Check configure.log."
+    echo "  ERROR: RDP support was NOT detected by configure."
     echo "  Ensure ${PKG_PREFIX}-freerdp is installed and pkg-config can find it."
+    echo "  Run: pkg-config --modversion freerdp3"
+    exit 1
 fi
 
 # ---------------------------------------------------------------------------
@@ -237,6 +255,7 @@ echo ""
 echo "=== Step 8: Verifying build output ==="
 
 GUACD_EXE="src/guacd/.libs/guacd.exe"
+RDP_PLUGIN=$(ls src/protocols/rdp/.libs/libguac-client-rdp*.dll 2>/dev/null | grep -v '\.dll\.a' | head -1)
 
 if [[ -f "$GUACD_EXE" ]]; then
     echo "SUCCESS: $GUACD_EXE"
@@ -247,6 +266,16 @@ if [[ -f "$GUACD_EXE" ]]; then
 else
     echo "FAILED: $GUACD_EXE not found."
     echo "Check build.log for errors."
+    exit 1
+fi
+
+echo ""
+if [[ -n "$RDP_PLUGIN" && -f "$RDP_PLUGIN" ]]; then
+    echo "SUCCESS: $RDP_PLUGIN"
+    ls -lh "$RDP_PLUGIN"
+else
+    echo "ERROR: RDP plugin not built (no libguac-client-rdp*.dll found)."
+    echo "RDP protocol support is missing. Check build.log for compile errors."
     exit 1
 fi
 
